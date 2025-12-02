@@ -68,15 +68,15 @@ defmodule Loteria.Cards do
     },
     %{
       id: 17,
-      name: "El Bandolón",
+      name: "La Guitarra",
       emoji: "🎸",
-      dicho: "Tocando su bandolón, está el mariachi en la esquina"
+      dicho: "Tocando su guitarra, está el mariachi en la esquina"
     },
     %{
       id: 18,
-      name: "El Violoncello",
+      name: "El Violín",
       emoji: "🎻",
-      dicho: "Creciendo se fue hasta el cielo, y como no fue violín, tuvo que ser violoncello"
+      dicho: "Creciendo se fue hasta el cielo, y como no fue violoncello, tuvo que ser violín"
     },
     %{
       id: 19,
@@ -106,7 +106,7 @@ defmodule Loteria.Cards do
       emoji: "🥴",
       dicho: "Ah qué borracho tan necio, ya no lo puedo aguantar"
     },
-    %{id: 26, name: "El Negrito", emoji: "👤", dicho: "El que se comió el azúcar"},
+    %{id: 26, name: "El Anonimo", emoji: "👤", dicho: "El quien nadie conoce en la fiesta, es el anonimo"},
     %{
       id: 27,
       name: "El Corazón",
@@ -185,9 +185,9 @@ defmodule Loteria.Cards do
     %{id: 47, name: "La Corona", emoji: "👑", dicho: "El sombrero de los reyes"},
     %{
       id: 48,
-      name: "La Chalupa",
+      name: "La Canoa",
       emoji: "🛶",
-      dicho: "Rema que rema Lupita, sentada en su chalupita"
+      dicho: "Rema que rema Lupita, sentada en su Canoa"
     },
     %{id: 49, name: "El Pino", emoji: "🌲", dicho: "Fresco y oloroso, en todo tiempo hermoso"},
     %{id: 50, name: "El Pescado", emoji: "🐟", dicho: "El que por la boca muere"},
@@ -206,7 +206,7 @@ defmodule Loteria.Cards do
     %{
       id: 53,
       name: "El Arpa",
-      emoji: "🎵",
+      emoji: "🪉",
       dicho: "Arpa vieja de mi suegra, ya no sirves pa' tocar"
     },
     %{
