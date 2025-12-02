@@ -166,22 +166,27 @@ defmodule LoteriaWeb.HomeLive do
             </h3>
             <ul class="space-y-2">
               <%= for game <- @active_games do %>
-                <li class="flex items-center justify-between bg-gray-100 rounded-lg px-4 py-2">
-                  <span class="font-mono font-bold text-purple-800">{game.id}</span>
-                  <div class="flex items-center gap-3">
-                    <span class="text-sm text-gray-600">
-                      {game.players} jugador(es)
-                    </span>
-                    <span class={[
-                      "text-xs px-2 py-1 rounded-full",
-                      if(game.status == :lobby,
-                        do: "bg-yellow-200 text-yellow-800",
-                        else: "bg-green-200 text-green-800"
-                      )
-                    ]}>
-                      {if game.status == :lobby, do: "Esperando", else: "Jugando"}
-                    </span>
-                  </div>
+                <li>
+                  <.link
+                    navigate={~p"/game/#{game.id}/cantor"}
+                    class="flex items-center justify-between bg-gray-100 hover:bg-gray-200 rounded-lg px-4 py-2 transition-colors"
+                  >
+                    <span class="font-mono font-bold text-purple-800">{game.id}</span>
+                    <div class="flex items-center gap-3">
+                      <span class="text-sm text-gray-600">
+                        {game.players} jugador(es)
+                      </span>
+                      <span class={[
+                        "text-xs px-2 py-1 rounded-full",
+                        if(game.status == :lobby,
+                          do: "bg-yellow-200 text-yellow-800",
+                          else: "bg-green-200 text-green-800"
+                        )
+                      ]}>
+                        {if game.status == :lobby, do: "Esperando", else: "Jugando"}
+                      </span>
+                    </div>
+                  </.link>
                 </li>
               <% end %>
             </ul>
