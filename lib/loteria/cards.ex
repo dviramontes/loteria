@@ -106,7 +106,12 @@ defmodule Loteria.Cards do
       emoji: "🥴",
       dicho: "Ah qué borracho tan necio, ya no lo puedo aguantar"
     },
-    %{id: 26, name: "El Anonimo", emoji: "👤", dicho: "El quien nadie conoce en la fiesta, es el anonimo"},
+    %{
+      id: 26,
+      name: "El Anonimo",
+      emoji: "👤",
+      dicho: "El quien nadie conoce en la fiesta, es el anonimo"
+    },
     %{
       id: 27,
       name: "El Corazón",
