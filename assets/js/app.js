@@ -25,11 +25,92 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/loteria"
 import topbar from "../vendor/topbar"
 
+// Lotería game hooks
+const LoteriaHooks = {
+  CardSound: {
+    mounted() {
+      this.el.addEventListener("click", () => {
+        this.playClickSound()
+      })
+    },
+    playClickSound() {
+      // Create a simple "pop" sound using Web Audio API
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+
+      // Pop sound: quick frequency sweep
+      oscillator.frequency.setValueAtTime(600, audioContext.currentTime)
+      oscillator.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.1)
+
+      // Quick fade out
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1)
+
+      oscillator.start(audioContext.currentTime)
+      oscillator.stop(audioContext.currentTime + 0.1)
+    }
+  },
+
+  WinnerCelebration: {
+    mounted() {
+      this.playWinSound()
+      this.showConfetti()
+    },
+    playWinSound() {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+
+      // Play a little celebration melody
+      const notes = [523.25, 659.25, 783.99, 1046.50] // C5, E5, G5, C6
+      notes.forEach((freq, i) => {
+        const oscillator = audioContext.createOscillator()
+        const gainNode = audioContext.createGain()
+
+        oscillator.connect(gainNode)
+        gainNode.connect(audioContext.destination)
+
+        oscillator.frequency.value = freq
+        oscillator.type = "sine"
+
+        const startTime = audioContext.currentTime + (i * 0.15)
+        gainNode.gain.setValueAtTime(0.2, startTime)
+        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3)
+
+        oscillator.start(startTime)
+        oscillator.stop(startTime + 0.3)
+      })
+    },
+    showConfetti() {
+      // Simple confetti effect
+      const colors = ['#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#1dd1a1']
+      for (let i = 0; i < 50; i++) {
+        const confetti = document.createElement('div')
+        confetti.style.cssText = `
+          position: fixed;
+          width: 10px;
+          height: 10px;
+          background: ${colors[Math.floor(Math.random() * colors.length)]};
+          left: ${Math.random() * 100}vw;
+          top: -10px;
+          border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
+          animation: confetti-fall ${2 + Math.random() * 2}s linear forwards;
+          z-index: 1000;
+        `
+        document.body.appendChild(confetti)
+        setTimeout(() => confetti.remove(), 4000)
+      }
+    }
+  }
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, ...LoteriaHooks},
 })
 
 // Show progress bar on live navigation and form submits

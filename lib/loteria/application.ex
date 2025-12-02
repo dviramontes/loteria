@@ -12,8 +12,8 @@ defmodule Loteria.Application do
       Loteria.Repo,
       {DNSCluster, query: Application.get_env(:loteria, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Loteria.PubSub},
-      # Start a worker by calling: Loteria.Worker.start_link(arg)
-      # {Loteria.Worker, arg},
+      # Game registry and supervisor for Lotería games
+      Loteria.GameRegistry,
       # Start to serve requests, typically the last entry
       LoteriaWeb.Endpoint
     ]

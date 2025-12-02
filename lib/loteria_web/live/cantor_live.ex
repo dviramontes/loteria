@@ -1,0 +1,312 @@
+defmodule LoteriaWeb.CantorLive do
+  use LoteriaWeb, :live_view
+
+  alias Loteria.{GameRegistry, GameServer, Cards}
+
+  @impl true
+  def mount(%{"id" => game_id}, _session, socket) do
+    case GameRegistry.find_game(game_id) do
+      {:ok, pid} ->
+        game = GameServer.get_game(pid)
+
+        if connected?(socket) do
+          Phoenix.PubSub.subscribe(Loteria.PubSub, "game:#{game_id}")
+        end
+
+        current_card = if game.current_card, do: Cards.get_card(game.current_card), else: nil
+
+        {:ok,
+         assign(socket,
+           page_title: "Cantor - #{game_id}",
+           game_id: game_id,
+           game_pid: pid,
+           game: game,
+           current_card: current_card,
+           drawn_cards: Enum.map(game.drawn, &Cards.get_card/1),
+           error: nil,
+           winner: nil
+         )}
+
+      {:error, :not_found} ->
+        {:ok, push_navigate(socket, to: ~p"/")}
+    end
+  end
+
+  @impl true
+  def handle_event("start_game", _params, socket) do
+    case GameServer.start_game(socket.assigns.game_pid, socket.id) do
+      {:ok, game} ->
+        {:noreply, assign(socket, game: game, error: nil)}
+
+      {:error, :not_enough_players} ->
+        {:noreply, assign(socket, error: "Se necesita al menos un jugador para empezar")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, error: "Error: #{reason}")}
+    end
+  end
+
+  @impl true
+  def handle_event("draw_card", _params, socket) do
+    case GameServer.draw_card(socket.assigns.game_pid, socket.id) do
+      {:ok, game, card} ->
+        drawn_cards = [card | socket.assigns.drawn_cards]
+        {:noreply, assign(socket, game: game, current_card: card, drawn_cards: drawn_cards)}
+
+      {:error, :deck_empty} ->
+        {:noreply, assign(socket, error: "No hay más cartas en el mazo")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, error: "Error: #{reason}")}
+    end
+  end
+
+  @impl true
+  def handle_event("reset_game", _params, socket) do
+    case GameServer.reset_game(socket.assigns.game_pid, socket.id) do
+      {:ok, game} ->
+        {:noreply,
+         assign(socket,
+           game: game,
+           current_card: nil,
+           drawn_cards: [],
+           winner: nil,
+           error: nil
+         )}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, error: "Error: #{reason}")}
+    end
+  end
+
+  @impl true
+  def handle_info({:player_joined, %{player_id: _id, name: _name}}, socket) do
+    game = GameServer.get_game(socket.assigns.game_pid)
+    {:noreply, assign(socket, game: game)}
+  end
+
+  @impl true
+  def handle_info({:player_left, %{player_id: _id}}, socket) do
+    game = GameServer.get_game(socket.assigns.game_pid)
+    {:noreply, assign(socket, game: game)}
+  end
+
+  @impl true
+  def handle_info({:game_started, _payload}, socket) do
+    game = GameServer.get_game(socket.assigns.game_pid)
+    {:noreply, assign(socket, game: game)}
+  end
+
+  @impl true
+  def handle_info({:winner, %{player_id: _id, name: name, winning_cards: cards}}, socket) do
+    game = GameServer.get_game(socket.assigns.game_pid)
+    {:noreply, assign(socket, game: game, winner: %{name: name, cards: cards})}
+  end
+
+  @impl true
+  def handle_info({:invalid_claim, _payload}, socket) do
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:game_reset, _payload}, socket) do
+    game = GameServer.get_game(socket.assigns.game_pid)
+    {:noreply, assign(socket, game: game, current_card: nil, drawn_cards: [], winner: nil)}
+  end
+
+  @impl true
+  def handle_info({:card_drawn, _payload}, socket) do
+    {:noreply, socket}
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div class="min-h-screen bg-gradient-to-b from-purple-600 via-pink-500 to-rose-500">
+      <header class="bg-black/20 backdrop-blur p-4">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+          <.link
+            navigate={~p"/"}
+            class="text-2xl font-bold text-white hover:text-yellow-300 transition-colors"
+          >
+            LOTERÍA.LIVE
+          </.link>
+          <div class="flex items-center gap-4">
+            <span class="text-white/80">
+              Jugadores: {map_size(@game.players)}
+            </span>
+            <div class="bg-white/20 px-4 py-2 rounded-lg">
+              <span class="text-yellow-300 font-mono font-bold">{@game_id}</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="max-w-4xl mx-auto p-4">
+        <%= if @winner do %>
+          <.winner_announcement winner={@winner} />
+          <div class="text-center mt-6">
+            <button
+              phx-click="reset_game"
+              class="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform hover:scale-105 transition-all"
+            >
+              Nueva Ronda
+            </button>
+          </div>
+        <% else %>
+          <%= case @game.status do %>
+            <% :lobby -> %>
+              <.lobby_view game={@game} game_id={@game_id} error={@error} />
+            <% :playing -> %>
+              <.playing_view
+                current_card={@current_card}
+                drawn_cards={@drawn_cards}
+                deck_remaining={length(@game.deck)}
+                error={@error}
+              />
+            <% :finished -> %>
+              <div class="text-center text-white text-2xl">
+                El juego ha terminado
+              </div>
+          <% end %>
+        <% end %>
+      </main>
+    </div>
+    """
+  end
+
+  defp lobby_view(assigns) do
+    ~H"""
+    <div class="bg-white rounded-2xl p-8 shadow-2xl border-4 border-yellow-400">
+      <h2 class="text-3xl font-bold text-purple-800 text-center mb-6">
+        Sala de Espera
+      </h2>
+
+      <div class="text-center mb-8">
+        <p class="text-gray-600 mb-2">Comparte este código con los jugadores:</p>
+        <div class="inline-block bg-gray-100 px-8 py-4 rounded-xl border-2 border-dashed border-gray-400">
+          <span class="text-4xl font-mono font-bold text-purple-800 tracking-widest">
+            {@game_id}
+          </span>
+        </div>
+      </div>
+
+      <div class="mb-8">
+        <h3 class="text-xl font-semibold text-gray-700 mb-4">
+          Jugadores ({map_size(@game.players)})
+        </h3>
+        <%= if map_size(@game.players) > 0 do %>
+          <ul class="space-y-2">
+            <%= for {_id, player} <- @game.players do %>
+              <li class="flex items-center gap-2 text-lg text-gray-900">
+                <span class="text-green-600">✓</span>
+                <span>{player.name}</span>
+              </li>
+            <% end %>
+          </ul>
+        <% else %>
+          <p class="text-gray-500 italic">Esperando jugadores...</p>
+        <% end %>
+      </div>
+
+      <%= if @error do %>
+        <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-xl text-center">
+          {@error}
+        </div>
+      <% end %>
+
+      <button
+        phx-click="start_game"
+        class="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-4 px-6 rounded-xl text-2xl transition-all transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={map_size(@game.players) < 1}
+      >
+        ¡EMPEZAR!
+      </button>
+    </div>
+    """
+  end
+
+  defp playing_view(assigns) do
+    ~H"""
+    <div class="space-y-6">
+      <div class="bg-white rounded-2xl p-8 shadow-2xl border-4 border-yellow-400 text-center">
+        <%= if @current_card do %>
+          <div class="mb-6">
+            <div class="text-9xl mb-4 drop-shadow-lg">
+              {@current_card.emoji}
+            </div>
+            <h2 class="text-4xl font-bold text-purple-800 mb-2">
+              {@current_card.name}
+            </h2>
+            <p class="text-xl text-gray-600 italic">
+              "{@current_card.dicho}"
+            </p>
+          </div>
+        <% else %>
+          <div class="py-12">
+            <p class="text-2xl text-gray-500">
+              Presiona "Siguiente" para sacar la primera carta
+            </p>
+          </div>
+        <% end %>
+
+        <%= if @error do %>
+          <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-xl">
+            {@error}
+          </div>
+        <% end %>
+
+        <button
+          phx-click="draw_card"
+          class="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-bold py-4 px-12 rounded-xl text-2xl transition-all transform hover:scale-105 shadow-lg disabled:opacity-50"
+          disabled={@deck_remaining == 0}
+        >
+          ◀ SIGUIENTE ▶
+        </button>
+
+        <p class="mt-4 text-gray-500">
+          Cartas restantes: {@deck_remaining}
+        </p>
+      </div>
+
+      <%= if length(@drawn_cards) > 0 do %>
+        <div class="bg-white rounded-xl p-4 shadow-lg">
+          <h3 class="text-lg font-semibold text-gray-700 mb-3">Historial:</h3>
+          <div class="flex gap-2 overflow-x-auto pb-2">
+            <%= for card <- Enum.reverse(@drawn_cards) do %>
+              <div
+                class="flex-shrink-0 w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-2xl border-2 border-gray-300"
+                title={card.name}
+              >
+                {card.emoji}
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp winner_announcement(assigns) do
+    ~H"""
+    <div class="bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 rounded-2xl p-8 shadow-2xl text-center animate-pulse">
+      <div class="text-6xl mb-4">🎉</div>
+      <h2 class="text-4xl font-bold text-white mb-4">
+        ¡LOTERÍA!
+      </h2>
+      <p class="text-2xl text-white mb-4">
+        <span class="font-bold">{@winner.name}</span> ha ganado!
+      </p>
+      <div class="flex justify-center gap-3 flex-wrap">
+        <%= for card_id <- @winner.cards do %>
+          <% card = Cards.get_card(card_id) %>
+          <div class="bg-white/90 rounded-lg p-3 text-3xl">
+            {card.emoji}
+          </div>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
+end

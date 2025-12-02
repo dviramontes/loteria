@@ -17,7 +17,9 @@ defmodule LoteriaWeb.Router do
   scope "/", LoteriaWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", HomeLive, :index
+    live "/game/:id/cantor", CantorLive, :show
+    live "/game/:id/play", PlayerLive, :show
   end
 
   # Other scopes may use custom stacks.
