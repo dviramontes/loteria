@@ -27,6 +27,20 @@ import topbar from "../vendor/topbar"
 
 // Lotería game hooks
 const LoteriaHooks = {
+  CopyToClipboard: {
+    mounted() {
+      this.el.addEventListener("click", () => {
+        const text = this.el.dataset.copy
+        navigator.clipboard.writeText(text).then(() => {
+          // Show brief feedback
+          const originalTitle = this.el.title
+          this.el.title = "¡Copiado!"
+          setTimeout(() => { this.el.title = originalTitle }, 1500)
+        })
+      })
+    }
+  },
+
   CardSound: {
     mounted() {
       this.el.addEventListener("click", () => {

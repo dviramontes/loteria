@@ -80,10 +80,18 @@ defmodule Loteria.GameRegistry do
   end
 
   @doc """
-  Lists all active game IDs.
+  Lists active game IDs.
+
+  ## Options
+    * `:limit` - Maximum number of games to return (default: all)
   """
-  def list_games do
-    Registry.select(@registry_name, [{{:"$1", :_, :_}, [], [:"$1"]}])
+  def list_games(opts \\ []) do
+    games = Registry.select(@registry_name, [{{:"$1", :_, :_}, [], [:"$1"]}])
+
+    case Keyword.get(opts, :limit) do
+      nil -> games
+      limit -> Enum.take(games, limit)
+    end
   end
 
   @doc """

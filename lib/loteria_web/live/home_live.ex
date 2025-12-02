@@ -5,13 +5,27 @@ defmodule LoteriaWeb.HomeLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    active_games = fetch_active_games()
+
     {:ok,
      assign(socket,
        page_title: "Loteria.live",
        join_code: "",
        player_name: "",
-       error: nil
+       error: nil,
+       active_games: active_games
      )}
+  end
+
+  defp fetch_active_games do
+    GameRegistry.list_games(limit: 5)
+    |> Enum.map(fn game_id ->
+      case GameRegistry.get_game(game_id) do
+        {:ok, game} -> %{id: game_id, players: map_size(game.players), status: game.status}
+        _ -> nil
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
   end
 
   @impl true
@@ -143,6 +157,37 @@ defmodule LoteriaWeb.HomeLive do
           <% end %>
         </div>
       </div>
+
+      <%= if length(@active_games) > 0 do %>
+        <div class="w-full max-w-md mt-6">
+          <div class="bg-white/80 backdrop-blur rounded-xl p-4 shadow-lg">
+            <h3 class="text-lg font-semibold text-gray-700 mb-3">
+              Juegos Activos ({length(@active_games)})
+            </h3>
+            <ul class="space-y-2">
+              <%= for game <- @active_games do %>
+                <li class="flex items-center justify-between bg-gray-100 rounded-lg px-4 py-2">
+                  <span class="font-mono font-bold text-purple-800">{game.id}</span>
+                  <div class="flex items-center gap-3">
+                    <span class="text-sm text-gray-600">
+                      {game.players} jugador(es)
+                    </span>
+                    <span class={[
+                      "text-xs px-2 py-1 rounded-full",
+                      if(game.status == :lobby,
+                        do: "bg-yellow-200 text-yellow-800",
+                        else: "bg-green-200 text-green-800"
+                      )
+                    ]}>
+                      {if game.status == :lobby, do: "Esperando", else: "Jugando"}
+                    </span>
+                  </div>
+                </li>
+              <% end %>
+            </ul>
+          </div>
+        </div>
+      <% end %>
 
       <div class="mt-8 flex gap-6 text-4xl">
         <span class="animate-bounce" style="animation-delay: 0s;">🐓</span>
