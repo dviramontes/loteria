@@ -9,7 +9,8 @@ defmodule LoteriaWeb.PlayerLive do
 
     case GameRegistry.find_game(game_id) do
       {:ok, pid} ->
-        player_id = socket.id
+        # Use stable player_id based on game + name so refreshes don't create new players
+        player_id = generate_player_id(game_id, player_name)
 
         if connected?(socket) do
           Phoenix.PubSub.subscribe(Loteria.PubSub, "game:#{game_id}")
@@ -328,5 +329,13 @@ defmodule LoteriaWeb.PlayerLive do
       </p>
     </div>
     """
+  end
+
+  # Generate a stable player_id from game_id and player_name
+  # This ensures the same player doesn't get duplicated on page refresh
+  defp generate_player_id(game_id, player_name) do
+    :crypto.hash(:sha256, "#{game_id}:#{player_name}")
+    |> Base.encode16(case: :lower)
+    |> binary_part(0, 16)
   end
 end
