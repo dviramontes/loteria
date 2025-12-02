@@ -9,7 +9,6 @@ defmodule Loteria.Application do
   def start(_type, _args) do
     children = [
       LoteriaWeb.Telemetry,
-      Loteria.Repo,
       {DNSCluster, query: Application.get_env(:loteria, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Loteria.PubSub},
       # Game registry and supervisor for Lotería games

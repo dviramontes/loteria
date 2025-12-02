@@ -8,7 +8,6 @@
 import Config
 
 config :loteria,
-  ecto_repos: [Loteria.Repo],
   generators: [timestamp_type: :utc_datetime]
 
 # Configure the endpoint
