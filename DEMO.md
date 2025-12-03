@@ -88,7 +88,7 @@ Phoenix.PubSub.broadcast(Loteria.PubSub, "game:ABC-123", {:game_reset, %{}})
 
 ```elixir
 # Get a game pid
-{:ok, pid} = Loteria.GameRegistry.find_game("BVS-042")
+{:ok, pid} = Loteria.GameRegistry.find_game("RUA-517")
 
 # Kill the process to show fault tolerance
 Process.exit(pid, :kill)

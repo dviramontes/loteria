@@ -378,10 +378,10 @@ defmodule LoteriaWeb.CantorLive do
       <%= if length(@drawn_cards) > 0 do %>
         <div class="bg-white rounded-xl p-4 shadow-lg">
           <h3 class="text-lg font-semibold text-gray-700 mb-3">Historial:</h3>
-          <div class="flex gap-2 overflow-x-auto pb-2">
+          <div class="flex flex-wrap gap-2">
             <%= for card <- Enum.reverse(@drawn_cards) do %>
               <div
-                class="flex-shrink-0 w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-2xl border-2 border-gray-300"
+                class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-2xl border-2 border-gray-300"
                 title={card.name}
               >
                 {card.emoji}
