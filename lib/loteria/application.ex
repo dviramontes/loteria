@@ -11,6 +11,8 @@ defmodule Loteria.Application do
       LoteriaWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:loteria, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Loteria.PubSub},
+      # Presence tracking for game rooms
+      LoteriaWeb.Presence,
       # Game registry and supervisor for Lotería games
       Loteria.GameRegistry,
       # Start to serve requests, typically the last entry

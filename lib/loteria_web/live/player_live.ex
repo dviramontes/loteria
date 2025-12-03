@@ -2,6 +2,7 @@ defmodule LoteriaWeb.PlayerLive do
   use LoteriaWeb, :live_view
 
   alias Loteria.{GameRegistry, GameServer, Cards}
+  alias LoteriaWeb.Presence
 
   @impl true
   def mount(%{"id" => game_id} = params, _session, socket) do
@@ -13,7 +14,17 @@ defmodule LoteriaWeb.PlayerLive do
         player_id = generate_player_id(game_id, player_name)
 
         if connected?(socket) do
+          # Subscribe to game events
           Phoenix.PubSub.subscribe(Loteria.PubSub, "game:#{game_id}")
+
+          # Track presence for this player
+          presence_topic = "presence:game:#{game_id}"
+          Phoenix.PubSub.subscribe(Loteria.PubSub, presence_topic)
+
+          Presence.track(self(), presence_topic, player_id, %{
+            name: player_name,
+            joined_at: System.system_time(:second)
+          })
 
           case GameServer.join(pid, player_id, player_name) do
             {:ok, _game} -> :ok
@@ -27,6 +38,10 @@ defmodule LoteriaWeb.PlayerLive do
         player = game.players[player_id]
         current_card = if game.current_card, do: Cards.get_card(game.current_card), else: nil
 
+        # Get initial presences
+        presence_topic = "presence:game:#{game_id}"
+        presences = Presence.list(presence_topic)
+
         {:ok,
          assign(socket,
            page_title: "Jugador - #{game_id}",
@@ -37,6 +52,8 @@ defmodule LoteriaWeb.PlayerLive do
            player_name: player_name,
            player: player,
            current_card: current_card,
+           presences: presences,
+           toast: nil,
            error: nil,
            winner: nil,
            claim_error: false
@@ -135,9 +152,58 @@ defmodule LoteriaWeb.PlayerLive do
   end
 
   @impl true
+  def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff", payload: diff}, socket) do
+    presence_topic = "presence:game:#{socket.assigns.game_id}"
+    presences = Presence.list(presence_topic)
+
+    # Show toast for joins (reconnections)
+    toast =
+      case diff do
+        %{joins: joins} when map_size(joins) > 0 ->
+          # Get the first joiner's name (usually just one at a time)
+          {_id, %{metas: [meta | _]}} = Enum.at(joins, 0)
+          # Don't show toast for self
+          if meta.name != socket.assigns.player_name do
+            %{type: :join, message: "#{meta.name} se reconectó"}
+          else
+            nil
+          end
+
+        %{leaves: leaves} when map_size(leaves) > 0 ->
+          {_id, %{metas: [meta | _]}} = Enum.at(leaves, 0)
+
+          if meta.name != socket.assigns.player_name do
+            %{type: :leave, message: "#{meta.name} se desconectó"}
+          else
+            nil
+          end
+
+        _ ->
+          nil
+      end
+
+    socket =
+      if toast do
+        # Clear toast after 3 seconds
+        Process.send_after(self(), :clear_toast, 3000)
+        assign(socket, presences: presences, toast: toast)
+      else
+        assign(socket, presences: presences)
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(:clear_toast, socket) do
+    {:noreply, assign(socket, toast: nil)}
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <div class="min-h-screen bg-gradient-to-b from-teal-500 via-cyan-500 to-blue-600">
+      <.toast_notification toast={@toast} />
       <header class="bg-black/20 backdrop-blur p-4">
         <div class="max-w-lg mx-auto flex justify-between items-center">
           <.link
@@ -161,7 +227,7 @@ defmodule LoteriaWeb.PlayerLive do
         <% else %>
           <%= case @game.status do %>
             <% :lobby -> %>
-              <.lobby_view game={@game} player_name={@player_name} />
+              <.lobby_view game={@game} player_name={@player_name} presences={@presences} />
             <% :playing -> %>
               <.playing_view
                 player={@player}
@@ -200,19 +266,45 @@ defmodule LoteriaWeb.PlayerLive do
         <h3 class="text-lg font-semibold text-gray-700 mb-3">
           Jugadores en la sala ({map_size(@game.players)})
         </h3>
-        <ul class="space-y-1">
-          <%= for {_id, player} <- @game.players do %>
-            <li class="text-gray-600">
+        <ul class="space-y-2">
+          <%= for {player_id, player} <- @game.players do %>
+            <li class="flex items-center justify-center gap-2 text-gray-600">
+              <.presence_indicator online={Map.has_key?(@presences, player_id)} />
               <%= if player.name == @player_name do %>
                 <span class="font-bold text-teal-600">{player.name} (tú)</span>
               <% else %>
-                {player.name}
+                <span class={unless Map.has_key?(@presences, player_id), do: "opacity-50"}>
+                  {player.name}
+                </span>
               <% end %>
             </li>
           <% end %>
         </ul>
       </div>
     </div>
+    """
+  end
+
+  defp presence_indicator(assigns) do
+    ~H"""
+    <span class={[
+      "inline-block w-2 h-2 rounded-full",
+      if(@online, do: "bg-green-500", else: "bg-gray-400")
+    ]}>
+    </span>
+    """
+  end
+
+  defp toast_notification(assigns) do
+    ~H"""
+    <%= if @toast do %>
+      <div class={[
+        "fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg shadow-lg text-white font-medium animate-fade-in",
+        if(@toast.type == :join, do: "bg-green-500", else: "bg-orange-500")
+      ]}>
+        {@toast.message}
+      </div>
+    <% end %>
     """
   end
 

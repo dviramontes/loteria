@@ -2,18 +2,37 @@ defmodule LoteriaWeb.CantorLive do
   use LoteriaWeb, :live_view
 
   alias Loteria.{GameRegistry, GameServer, Cards}
+  alias LoteriaWeb.Presence
 
   @impl true
   def mount(%{"id" => game_id}, _session, socket) do
     case GameRegistry.find_game(game_id) do
       {:ok, pid} ->
         game = GameServer.get_game(pid)
+        presence_topic = "presence:game:#{game_id}"
+        cantor_topic = "presence:cantor:#{game_id}"
+
+        # Generate a stable cantor_id for this session
+        cantor_id = socket.id
 
         if connected?(socket) do
           Phoenix.PubSub.subscribe(Loteria.PubSub, "game:#{game_id}")
+          Phoenix.PubSub.subscribe(Loteria.PubSub, presence_topic)
+
+          # Track cantor presence
+          Presence.track(self(), cantor_topic, "cantor", %{
+            joined_at: System.system_time(:second)
+          })
+
+          # Claim cantor role (updates game state to recognize this socket.id)
+          GameServer.claim_cantor(pid, cantor_id)
         end
 
         current_card = if game.current_card, do: Cards.get_card(game.current_card), else: nil
+        presences = Presence.list(presence_topic)
+
+        # Refresh game state after claiming
+        game = GameServer.get_game(pid)
 
         {:ok,
          assign(socket,
@@ -21,8 +40,11 @@ defmodule LoteriaWeb.CantorLive do
            game_id: game_id,
            game_pid: pid,
            game: game,
+           cantor_id: cantor_id,
            current_card: current_card,
            drawn_cards: Enum.map(game.drawn, &Cards.get_card/1),
+           presences: presences,
+           toast: nil,
            error: nil,
            winner: nil
          )}
@@ -34,7 +56,7 @@ defmodule LoteriaWeb.CantorLive do
 
   @impl true
   def handle_event("start_game", _params, socket) do
-    case GameServer.start_game(socket.assigns.game_pid, socket.id) do
+    case GameServer.start_game(socket.assigns.game_pid, socket.assigns.cantor_id) do
       {:ok, game} ->
         {:noreply, assign(socket, game: game, error: nil)}
 
@@ -48,7 +70,7 @@ defmodule LoteriaWeb.CantorLive do
 
   @impl true
   def handle_event("draw_card", _params, socket) do
-    case GameServer.draw_card(socket.assigns.game_pid, socket.id) do
+    case GameServer.draw_card(socket.assigns.game_pid, socket.assigns.cantor_id) do
       {:ok, game, card} ->
         drawn_cards = [card | socket.assigns.drawn_cards]
         {:noreply, assign(socket, game: game, current_card: card, drawn_cards: drawn_cards)}
@@ -63,7 +85,7 @@ defmodule LoteriaWeb.CantorLive do
 
   @impl true
   def handle_event("reset_game", _params, socket) do
-    case GameServer.reset_game(socket.assigns.game_pid, socket.id) do
+    case GameServer.reset_game(socket.assigns.game_pid, socket.assigns.cantor_id) do
       {:ok, game} ->
         {:noreply,
          assign(socket,
@@ -120,9 +142,46 @@ defmodule LoteriaWeb.CantorLive do
   end
 
   @impl true
+  def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff", payload: diff}, socket) do
+    presence_topic = "presence:game:#{socket.assigns.game_id}"
+    presences = Presence.list(presence_topic)
+
+    # Show toast for joins/leaves
+    toast =
+      case diff do
+        %{joins: joins} when map_size(joins) > 0 ->
+          {_id, %{metas: [meta | _]}} = Enum.at(joins, 0)
+          %{type: :join, message: "#{meta.name} se reconectó"}
+
+        %{leaves: leaves} when map_size(leaves) > 0 ->
+          {_id, %{metas: [meta | _]}} = Enum.at(leaves, 0)
+          %{type: :leave, message: "#{meta.name} se desconectó"}
+
+        _ ->
+          nil
+      end
+
+    socket =
+      if toast do
+        Process.send_after(self(), :clear_toast, 3000)
+        assign(socket, presences: presences, toast: toast)
+      else
+        assign(socket, presences: presences)
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(:clear_toast, socket) do
+    {:noreply, assign(socket, toast: nil)}
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <div class="min-h-screen bg-gradient-to-b from-purple-600 via-pink-500 to-rose-500">
+      <.toast_notification toast={@toast} />
       <header class="bg-black/20 backdrop-blur p-4">
         <div class="max-w-4xl mx-auto flex justify-between items-center">
           <.link
@@ -156,7 +215,7 @@ defmodule LoteriaWeb.CantorLive do
         <% else %>
           <%= case @game.status do %>
             <% :lobby -> %>
-              <.lobby_view game={@game} game_id={@game_id} error={@error} />
+              <.lobby_view game={@game} game_id={@game_id} error={@error} presences={@presences} />
             <% :playing -> %>
               <.playing_view
                 current_card={@current_card}
@@ -219,10 +278,12 @@ defmodule LoteriaWeb.CantorLive do
         </h3>
         <%= if map_size(@game.players) > 0 do %>
           <ul class="space-y-2">
-            <%= for {_id, player} <- @game.players do %>
+            <%= for {player_id, player} <- @game.players do %>
               <li class="flex items-center gap-2 text-lg text-gray-900">
-                <span class="text-green-600">✓</span>
-                <span>{player.name}</span>
+                <.presence_indicator online={Map.has_key?(@presences, player_id)} />
+                <span class={unless Map.has_key?(@presences, player_id), do: "opacity-50"}>
+                  {player.name}
+                </span>
               </li>
             <% end %>
           </ul>
@@ -245,6 +306,29 @@ defmodule LoteriaWeb.CantorLive do
         ¡EMPEZAR!
       </button>
     </div>
+    """
+  end
+
+  defp presence_indicator(assigns) do
+    ~H"""
+    <span class={[
+      "inline-block w-2 h-2 rounded-full",
+      if(@online, do: "bg-green-500", else: "bg-gray-400")
+    ]}>
+    </span>
+    """
+  end
+
+  defp toast_notification(assigns) do
+    ~H"""
+    <%= if @toast do %>
+      <div class={[
+        "fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg shadow-lg text-white font-medium",
+        if(@toast.type == :join, do: "bg-green-500", else: "bg-orange-500")
+      ]}>
+        {@toast.message}
+      </div>
+    <% end %>
     """
   end
 

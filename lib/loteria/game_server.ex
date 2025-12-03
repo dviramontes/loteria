@@ -76,6 +76,13 @@ defmodule Loteria.GameServer do
     GenServer.call(pid, {:reset_game, caller_id})
   end
 
+  @doc """
+  Claims the cantor role for a new caller.
+  """
+  def claim_cantor(pid, new_cantor_id) do
+    GenServer.call(pid, {:claim_cantor, new_cantor_id})
+  end
+
   # Server Callbacks
 
   @impl true
@@ -205,6 +212,12 @@ defmodule Loteria.GameServer do
       {:error, reason} ->
         {:reply, {:error, reason}, game, @timeout}
     end
+  end
+
+  @impl true
+  def handle_call({:claim_cantor, new_cantor_id}, _from, game) do
+    {:ok, updated_game} = Game.claim_cantor(game, new_cantor_id)
+    {:reply, {:ok, updated_game}, updated_game, @timeout}
   end
 
   @impl true

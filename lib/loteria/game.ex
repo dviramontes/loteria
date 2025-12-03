@@ -311,6 +311,14 @@ defmodule Loteria.Game do
     Map.get(players, player_id)
   end
 
+  @doc """
+  Claims the cantor role for a new caller.
+  Used when original cantor disconnects and someone needs to take over.
+  """
+  def claim_cantor(%__MODULE__{} = game, new_cantor_id) do
+    {:ok, %{game | cantor_id: new_cantor_id}}
+  end
+
   # Private functions
 
   defp generate_room_code do
