@@ -45,9 +45,5 @@ module "app" {
       value_prod    = "true"
       value_preview = "true"
     }
-    PHX_HOST = {
-      value_prod    = "loteria.onrender.com"
-      value_preview = var.pr_number != null ? "loteria-pr-${var.pr_number}.onrender.com" : null
-    }
   }
 }
