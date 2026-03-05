@@ -17,7 +17,7 @@ provider "render" {
 }
 
 module "app" {
-  source = "git::https://github.com/dviramontes/terraform-render-preview-module.git//modules/render-preview-stack?ref=v0.1.1"
+  source = "git::https://github.com/dviramontes/terraform-render-preview-module.git//modules/render-preview-stack?ref=v0.1.2"
 
   is_preview = var.is_preview
   pr_number  = var.pr_number
