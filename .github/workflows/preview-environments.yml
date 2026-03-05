@@ -1,0 +1,143 @@
+name: Preview Environments (Terraform)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview-apply:
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      TF_IN_AUTOMATION: true
+      TF_VAR_render_api_key: ${{ secrets.RENDER_API_KEY }}
+      TF_VAR_render_owner_id: ${{ secrets.RENDER_OWNER_ID }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required configuration
+        run: |
+          test -n "${{ secrets.RENDER_API_KEY }}" || { echo "Missing secret: RENDER_API_KEY"; exit 1; }
+          test -n "${{ secrets.RENDER_OWNER_ID }}" || { echo "Missing secret: RENDER_OWNER_ID"; exit 1; }
+          test -n "${{ secrets.AWS_ACCESS_KEY_ID }}" || { echo "Missing secret: AWS_ACCESS_KEY_ID"; exit 1; }
+          test -n "${{ secrets.AWS_SECRET_ACCESS_KEY }}" || { echo "Missing secret: AWS_SECRET_ACCESS_KEY"; exit 1; }
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init (preview state)
+        run: |
+          LOCK_TABLE_ARG=""
+          if [ -n "${{ vars.TF_LOCK_TABLE }}" ]; then
+            LOCK_TABLE_ARG="-backend-config=dynamodb_table=${{ vars.TF_LOCK_TABLE }}"
+          fi
+          terraform init \
+            -backend-config="bucket=loteria-terraform-state" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            $LOCK_TABLE_ARG \
+            -backend-config="key=render/previews/pr-${{ github.event.pull_request.number }}.tfstate"
+
+      - name: Terraform apply (preview)
+        run: |
+          terraform apply -auto-approve \
+            -var="is_preview=true" \
+            -var="pr_number=${{ github.event.pull_request.number }}"
+
+  preview-destroy:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      TF_IN_AUTOMATION: true
+      TF_VAR_render_api_key: ${{ secrets.RENDER_API_KEY }}
+      TF_VAR_render_owner_id: ${{ secrets.RENDER_OWNER_ID }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required configuration
+        run: |
+          test -n "${{ secrets.RENDER_API_KEY }}" || { echo "Missing secret: RENDER_API_KEY"; exit 1; }
+          test -n "${{ secrets.RENDER_OWNER_ID }}" || { echo "Missing secret: RENDER_OWNER_ID"; exit 1; }
+          test -n "${{ secrets.AWS_ACCESS_KEY_ID }}" || { echo "Missing secret: AWS_ACCESS_KEY_ID"; exit 1; }
+          test -n "${{ secrets.AWS_SECRET_ACCESS_KEY }}" || { echo "Missing secret: AWS_SECRET_ACCESS_KEY"; exit 1; }
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init (preview state)
+        run: |
+          LOCK_TABLE_ARG=""
+          if [ -n "${{ vars.TF_LOCK_TABLE }}" ]; then
+            LOCK_TABLE_ARG="-backend-config=dynamodb_table=${{ vars.TF_LOCK_TABLE }}"
+          fi
+          terraform init \
+            -backend-config="bucket=loteria-terraform-state" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            $LOCK_TABLE_ARG \
+            -backend-config="key=render/previews/pr-${{ github.event.pull_request.number }}.tfstate"
+
+      - name: Terraform destroy (preview)
+        run: |
+          terraform destroy -auto-approve \
+            -var="is_preview=true" \
+            -var="pr_number=${{ github.event.pull_request.number }}"
+
+  prod-apply:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      TF_IN_AUTOMATION: true
+      TF_VAR_render_api_key: ${{ secrets.RENDER_API_KEY }}
+      TF_VAR_render_owner_id: ${{ secrets.RENDER_OWNER_ID }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required configuration
+        run: |
+          test -n "${{ secrets.RENDER_API_KEY }}" || { echo "Missing secret: RENDER_API_KEY"; exit 1; }
+          test -n "${{ secrets.RENDER_OWNER_ID }}" || { echo "Missing secret: RENDER_OWNER_ID"; exit 1; }
+          test -n "${{ secrets.AWS_ACCESS_KEY_ID }}" || { echo "Missing secret: AWS_ACCESS_KEY_ID"; exit 1; }
+          test -n "${{ secrets.AWS_SECRET_ACCESS_KEY }}" || { echo "Missing secret: AWS_SECRET_ACCESS_KEY"; exit 1; }
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init (prod state)
+        run: |
+          LOCK_TABLE_ARG=""
+          if [ -n "${{ vars.TF_LOCK_TABLE }}" ]; then
+            LOCK_TABLE_ARG="-backend-config=dynamodb_table=${{ vars.TF_LOCK_TABLE }}"
+          fi
+          terraform init \
+            -backend-config="bucket=loteria-terraform-state" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            $LOCK_TABLE_ARG \
+            -backend-config="key=render/prod.tfstate"
+
+      - name: Terraform apply (prod)
+        run: |
+          terraform apply -auto-approve \
+            -var="is_preview=false"
