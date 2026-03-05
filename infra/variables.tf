@@ -20,3 +20,9 @@ variable "pr_number" {
   type        = number
   default     = null
 }
+
+variable "secret_key_base" {
+  description = "Phoenix secret key base (at least 64 bytes)."
+  type        = string
+  sensitive   = true
+}

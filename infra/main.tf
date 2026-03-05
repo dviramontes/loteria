@@ -39,7 +39,8 @@ module "app" {
 
   env_vars = {
     SECRET_KEY_BASE = {
-      generate_value = true
+      value_prod    = var.secret_key_base
+      value_preview = var.secret_key_base
     }
     PHX_SERVER = {
       value_prod    = "true"
