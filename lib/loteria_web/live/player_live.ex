@@ -214,7 +214,6 @@ defmodule LoteriaWeb.PlayerLive do
           </.link>
           <%= if @current_card do %>
             <div class="flex items-center gap-2 bg-white/20 px-3 py-1 rounded-lg">
-              <span class="text-2xl">{@current_card.emoji}</span>
               <span class="text-white font-semibold">{@current_card.name}</span>
             </div>
           <% end %>
@@ -355,7 +354,7 @@ defmodule LoteriaWeb.PlayerLive do
               do: "bg-green-100 border-green-500 shadow-inner",
               else: "bg-white border-gray-300 hover:border-teal-400"
             ),
-            if(is_drawn && !is_marked, do: "ring-2 ring-yellow-400 animate-pulse", else: "")
+            if(is_drawn && !is_marked, do: "", else: "")
           ]}
         >
           <span class="text-3xl md:text-4xl">{card.emoji}</span>
