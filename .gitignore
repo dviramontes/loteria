@@ -38,3 +38,10 @@ npm-debug.log
 # Local environment and secret files.
 .env
 .env.*
+
+# Terraform
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.backup
+infra/.terraform.lock.hcl
+infra/terraform.tfvars
